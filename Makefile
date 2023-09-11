@@ -1,4 +1,4 @@
-mapledos.img: limine.cfg mapledos.elf
+mapledos.img: limine.cfg build/mapledos.elf
 	dd if=/dev/zero of=$@.tmp bs=64MiB count=1 status=none
 	parted $@.tmp -s mklabel gpt \
 		mkpart fat32 0% 100% \
@@ -18,6 +18,12 @@ mapledos.img: limine.cfg mapledos.elf
 	limine bios-install $@.tmp
 	mv $@.tmp $@
 
+build/mapledos.elf: kernel/mapledos.nim build
+	nim c -o:$@ $<
+
+build:
+	mkdir -p build
+
 .PHONY: clean
 clean:
-	$(RM) -r mapledos.elf image/ $(wildcard mapledos.img*)
+	$(RM) -r mapledos.elf build/ image/ $(wildcard mapledos.img*)
