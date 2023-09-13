@@ -11,38 +11,38 @@ var framebufferRequest {.exportc.} = LimineRequest(
     response: nil
 )
 
-type MapleSetPixelResult = enum
+type MapleResult = enum
+    InvalidState
     Success
     InvalidScreen
-    InvalidCoords
-    InvalidDepth
+    InvalidPosition
+    InvalidColorDepth
 
-proc mapleSetPixel(fbRes: ptr LimineFramebufferResponse, screen, x, y: uint64, red, green, blue: uint16): MapleSetPixelResult =
-    if fbRes.framebuffer_count > screen:
-        var buffer = fbRes.framebuffers[screen]
-        if buffer.width > x and buffer.height > y:
-            var index = (buffer.pitch * y) + ((buffer.bpp shr 3) * x)
-            if buffer.red_mask_size <= 16 or buffer.green_mask_size <= 16 or buffer.blue_mask_size <= 16:
-                var r: uint32 = red shr (16 - buffer.red_mask_size)
-                var g: uint32 = green shr (16 - buffer.green_mask_size)
-                var b: uint32 = blue shr (16 - buffer.blue_mask_size)
-                var data = (r shl buffer.red_mask_shift) or (g shl buffer.green_mask_shift) or (b shl buffer.blue_mask_shift)
-                for i in 0..cast[uint](buffer.bpp shr 3):
-                    buffer.address[index + i] = cast[uint8](data and 0xFF)
-                    data = data shr 8
-                return Success
-            else:
-                return InvalidDepth
-        else:
-            return InvalidCoords
-    else:
+proc mapleSetPixel(fbRes: ptr LimineFramebufferResponse, screen, x, y, red, green, blue: uint64): MapleResult =
+    if fbRes.framebuffer_count <= screen:
         return InvalidScreen
+    var buffer = fbRes.framebuffers[screen]
+    if buffer.width <= x or buffer.height <= y:
+        return InvalidPosition
+    var size = cast[uint](buffer.bpp shr 3)
+    var index = (buffer.pitch * y) + (size * x)
+    if buffer.red_mask_size > 64 or buffer.green_mask_size > 64 or buffer.blue_mask_size > 64:
+        return InvalidColorDepth
+    var r = (red shr (64 - buffer.red_mask_size)) shl buffer.red_mask_shift
+    var g = (green shr (64 - buffer.green_mask_size)) shl buffer.green_mask_shift
+    var b = (blue shr (64 - buffer.blue_mask_size)) shl buffer.blue_mask_shift
+    var data = r or g or b
+    for i in 0..size:
+        buffer.address[index + i] = cast[uint8](data and 0xFF)
+        data = data shr 8
+    return Success
 
 proc mapleMain() {.exportc.} =
+    const fragment = high(uint64) shr 8
     if framebufferRequest.response != nil:
         var framebufferResponse = cast[ptr LimineFramebufferResponse](framebufferRequest.response)
-        for y in 0..256'u:
-            for x in 0..256'u:
-                discard mapleSetPixel(framebufferResponse, 0, x, y, cast[uint16](x) * 255, cast[uint16](y) * 255, 65535)
+        for y in 0..255'u:
+            for x in 0..255'u:
+                discard mapleSetPixel(framebufferResponse, 0, x, y, x * fragment, y * fragment, high(uint64))
         while true:
             discard
