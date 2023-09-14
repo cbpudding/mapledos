@@ -14,14 +14,10 @@ var framebufferRequest {.exportc.} = LimineRequest(
 type MapleResult = enum
     InvalidState
     Success
-    InvalidScreen
     InvalidPosition
     InvalidColorDepth
 
-proc mapleSetPixel(fbRes: ptr LimineFramebufferResponse, screen, x, y, red, green, blue: uint64): MapleResult =
-    if fbRes.framebuffer_count <= screen:
-        return InvalidScreen
-    var buffer = fbRes.framebuffers[screen]
+proc mapleSetPixel(buffer: ptr LimineFramebuffer, x, y, red, green, blue: uint64): MapleResult =
     if buffer.width <= x or buffer.height <= y:
         return InvalidPosition
     var size = cast[uint](buffer.bpp shr 3)
@@ -37,12 +33,19 @@ proc mapleSetPixel(fbRes: ptr LimineFramebufferResponse, screen, x, y, red, gree
         data = data shr 8
     return Success
 
+proc mapleSimpleSetPixel24(buffer: ptr LimineFramebuffer, x, y, color: uint64): MapleResult =
+    var red = (color and 0xFF0000) shl 40
+    var green = (color and 0xFF00) shl 48
+    var blue = (color and 0xFF) shl 56
+    return mapleSetPixel(buffer, x, y, red, green, blue)
+
 proc mapleMain() {.exportc.} =
-    const fragment = high(uint64) shr 8
     if framebufferRequest.response != nil:
         var framebufferResponse = cast[ptr LimineFramebufferResponse](framebufferRequest.response)
-        for y in 0..255'u:
-            for x in 0..255'u:
-                discard mapleSetPixel(framebufferResponse, 0, x, y, x * fragment, y * fragment, high(uint64))
+        if framebufferResponse.framebuffer_count > 0:
+            var framebuffer = framebufferResponse.framebuffers[0]
+            for y in 0..framebuffer.height:
+                for x in 0..framebuffer.width:
+                    discard mapleSimpleSetPixel24(framebuffer, x, y, 0x0B6592)
         while true:
             discard
